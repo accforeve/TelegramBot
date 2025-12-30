@@ -1,6 +1,6 @@
 ### **基于原版 https://github.com/wozulong/open-wegram-bot 更该**
 
-**### 相较于原版，做了如下更改：**
+**### 相较于原版，做了如下增改：**
 
 1. 核心架构与基础设施
 
@@ -36,7 +36,7 @@
 2. 在左侧菜单栏找到 Workers & Pages (Workers 和   #@Pages)，点击进入。
 3. 在二级菜单中点击 KV。
 4. 点击右上角的 Create a namespace (创建命名空间)。
-5. 在 "Namespace Name" 中输入：TG_BOT_KV• 注意：名字可以随意取，但为了配合代码，建议直接用这个。
+5. 在 "Namespace Name" 中输入：TG_BOT_KV （注意：名字可以随意取，但为了配合代码，建议直接用这个。）
 6. 点击 Add (添加)。
  状态检查：列表中出现 TG_BOT_KV 即为成功。
 
@@ -58,7 +58,7 @@
 ### **第三步：设置环境变量 (Environment Variables)**
 
 1. 点击 Add variable (添加变量)。
-2. 你需要添加以下两个变量：
+2. 你需要添加以下两个变量：（注意：名字可以随意取，但为了配合代码，建议直接用这个。）
 • 变量 1 (必须):
 • Variable name: SECRET_TOKEN
 • Value: 输入一串复杂的随机字符（建议 20 位以上，包含大小写字母和数字）。
