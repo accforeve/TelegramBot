@@ -1,4 +1,4 @@
-### **基于原版 https://github.com/wozulong/open-wegram-bot 更该**
+### **基于原版 https://github.com/wozulong/open-wegram-bot 增改**
 
 **### 相较于原版，做了如下增改：**
 
