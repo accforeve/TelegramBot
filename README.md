@@ -58,7 +58,7 @@
 ### **第三步：设置环境变量 (Environment Variables)**
 
 1. 点击 Add variable (添加变量)。
-2. 你需要添加以下两个变量：（注意：名字可以随意取，但为了配合代码，建议直接用这个。）
+2. 你需要添加以下两个变量：（⚠️注意：名字可以随意取，但为了配合代码，建议直接用这个。）
 • 变量 1 (必须):
 • Variable name: SECRET_TOKEN
 • Value: 输入一串复杂的随机字符（建议 20 位以上，包含大小写字母和数字）。
@@ -74,9 +74,8 @@
 
 1. 点击右上角的 Edit code (编辑代码)。
 2. 在左侧文件列表：
-• 找到 worker.js，清空内容，把之前准备好的 worker.js 粘贴进去。
-• 右键点击文件列表空白处 -> Create new file (新建文件)，命名为 core.js。
-• 把 core.js 粘贴进去。
+• 找到 worker.js，清空内容，把 worker.js 粘贴进去。
+• 右键点击文件列表空白处 -> Create new file (新建文件)，命名为 core.js ，把 core.js 粘贴进去。
 3. 点击右上角的 Deploy (部署)。
 
 ### **第五步：激活机器人 (最后一步！)**
@@ -87,8 +86,8 @@ https://[你的Worker域名]/public/install/[你的TG账号ID]/[你的机器人T
 • 你的Worker域名: 在 Worker 详情页上方可以看到，通常是 xxx.workers.dev。
 • 你的TG账号ID: 纯数字 ID（可以用 @userinfobot 查询）。
 • 你的机器人Token: 找 @BotFather 申请时给的那串。
-2. 在浏览器打开这个链接。
+2. 在浏览器打开这个拼接好的链接。
 3. 如果页面显示 {"success":true,"message":"Webhook successfully installed."}，恭喜你，大功告成！
 
-注意：理论上可以绑定多个bot，如果更改代码，建议卸载原来绑定的bot后重新绑定。
+⚠️注意：可以绑定多个bot。如果更迭代码，建议解绑原来绑定的bot后重新绑定。
 解绑方法：https://[你的Worker域名]/public/uninstall/[你的机器人Token]
