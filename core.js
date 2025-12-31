@@ -17,6 +17,11 @@ export async function postToTelegramApi(token, method, body) {
     });
 }
 
+// 辅助函数：将时间戳格式化为 UTC 时间字符串
+function formatUTCTime(timestamp) {
+    return new Date(timestamp * 1000).toISOString().replace('T', ' ').substring(0, 19) + " UTC";
+}
+
 export async function handleInstall(request, ownerUid, botToken, prefix, secretToken) {
     if (!validateSecretToken(secretToken)) {
         return jsonResponse({
@@ -59,13 +64,15 @@ export async function handleUninstall(botToken, secretToken) {
 }
 
 export async function handleWebhook(request, ownerUid, botToken, secretToken, KV) {
-    // 1. 安全校验
     if (secretToken !== request.headers.get('X-Telegram-Bot-Api-Secret-Token')) {
         return new Response('Unauthorized', { status: 401 });
     }
 
     const update = await request.json();
     const currentTime = Math.floor(Date.now() / 1000); 
+
+    // 定义封禁时长 (秒) - 24小时
+    const BAN_DURATION = 86400;
 
     // ========================================================================
     // 处理按钮点击 (Callback Query)
@@ -76,11 +83,13 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
 
         if (query.data === 'captcha_verify' && KV) {
             // 1. 检查是否在黑名单中
-            const isBlacklisted = await KV.get(`blacklist:${userId}`);
-            if (isBlacklisted) {
+            const banTimestamp = await KV.get(`blacklist:${userId}`);
+            if (banTimestamp) {
+                // 如果存在，说明被封禁。读取存储的时间戳并格式化
+                const unbanTimeStr = formatUTCTime(parseInt(banTimestamp));
                 await postToTelegramApi(botToken, 'answerCallbackQuery', {
                     callback_query_id: query.id,
-                    text: '⛔️ You are banned for 24h. / 您已被封禁24小时。',
+                    text: `⛔️ Banned until: ${unbanTimeStr}\n您已被封禁，解封时间: ${unbanTimeStr}`,
                     show_alert: true
                 });
                 return new Response('OK');
@@ -102,23 +111,28 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
             const timeDiff = currentTime - parseInt(pendingTime);
             
             if (timeDiff > 30) {
-                // 超时 -> 拉入黑名单 24小时 (86400秒)
-                await KV.put(`blacklist:${userId}`, 'true', { expirationTtl: 86400 });
+                // 超时 -> 拉入黑名单
+                // [修改] Value 存入解封时间戳，而非简单的 "true"
+                const unbanTime = currentTime + BAN_DURATION;
+                await KV.put(`blacklist:${userId}`, unbanTime.toString(), { expirationTtl: BAN_DURATION });
                 await KV.delete(`pending:${userId}`);
+
+                const unbanTimeStr = formatUTCTime(unbanTime);
 
                 await postToTelegramApi(botToken, 'answerCallbackQuery', {
                     callback_query_id: query.id,
-                    text: `❌ Timeout! (>30s). Banned for 24h.`,
+                    text: `❌ Timeout! Banned until ${unbanTimeStr}`,
                     show_alert: true
                 });
                 
                 await postToTelegramApi(botToken, 'editMessageText', {
                     chat_id: query.message.chat.id,
                     message_id: query.message.message_id,
-                    text: '⛔️ 验证超时，您已被封禁 24 小时。\nTimeout. You are banned for 24 hours.'
+                    text: `⛔️ 验证超时，您已被封禁 24 小时。\nTimeout. Banned until:\n<b>${unbanTimeStr}</b>`,
+                    parse_mode: 'HTML'
                 });
             } else {
-                // 通过 -> 授予 1 小时有效期 (3600秒)
+                // 通过 -> 授予 1 小时有效期
                 await KV.put(`verified:${userId}`, 'true', { expirationTtl: 3600 });
                 await KV.delete(`pending:${userId}`);
 
@@ -177,38 +191,50 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
             const userId = message.chat.id.toString();
 
             // 1. 检查黑名单
-            const isBlacklisted = await KV.get(`blacklist:${userId}`);
-            if (isBlacklisted) {
-                // 黑名单用户静默处理，或者取消注释下面这行提示他
-                // await postToTelegramApi(botToken, 'sendMessage', { chat_id: userId, text: '⛔️ You are banned for 24h.' });
+            const banTimestamp = await KV.get(`blacklist:${userId}`);
+            if (banTimestamp) {
+                // [修改] 如果处于黑名单，提示解封时间
+                const unbanTimeStr = formatUTCTime(parseInt(banTimestamp));
+                
+                // 这里选择是否回复用户。为了避免被刷屏，可以选择仅在用户发 /start 时提示，或者每次都提示
+                // 为了友好，我们回复一条提示
+                await postToTelegramApi(botToken, 'sendMessage', { 
+                    chat_id: userId, 
+                    text: `⛔️ 您已被封禁 (Banned)。\n\n解封时间 / Unban Time:\n<b>${unbanTimeStr}</b>`,
+                    parse_mode: 'HTML'
+                });
                 return new Response('OK');
             }
 
-            // 2. 检查是否在 Pending 状态 (防止重复验证)
+            // 2. 检查 Pending (防止重复验证)
             const existingPending = await KV.get(`pending:${userId}`);
             if (existingPending) {
-                // 检查旧验证请求是否已超时 (超过 30秒)
                 if (currentTime - parseInt(existingPending) > 30) {
-                    // 之前发起的验证超时 -> 封禁 24小时
-                    await KV.put(`blacklist:${userId}`, 'true', { expirationTtl: 86400 });
+                    // 超时封禁
+                    const unbanTime = currentTime + BAN_DURATION;
+                    await KV.put(`blacklist:${userId}`, unbanTime.toString(), { expirationTtl: BAN_DURATION });
                     await KV.delete(`pending:${userId}`);
+                    
+                    const unbanTimeStr = formatUTCTime(unbanTime);
                     await postToTelegramApi(botToken, 'sendMessage', { 
                         chat_id: userId, 
-                        text: '⛔️ 之前的验证超时，您已被封禁 24 小时。\nPrevious verification timed out. Banned for 24h.' 
+                        text: `⛔️ 验证超时，您已被封禁 24 小时。\nPrevious verification timed out.\n\n解封时间 / Unban Time:\n<b>${unbanTimeStr}</b>`,
+                        parse_mode: 'HTML'
                     });
                 }
                 return new Response('OK');
             }
 
-            // 3. 检查白名单 (有效期 1 小时)
+            // 3. 检查白名单
             const isVerified = await KV.get(`verified:${userId}`);
             if (!isVerified) {
-                // 未验证 -> 发起新验证
+                const deadlineTime = new Date((currentTime + 30) * 1000).toISOString().substr(11, 8); // HH:MM:SS (UTC)
+
                 await KV.put(`pending:${userId}`, currentTime.toString());
 
                 await postToTelegramApi(botToken, 'sendMessage', {
                     chat_id: userId,
-                    text: '🛡 <b>人机验证 / Verification</b>\n\n请在 <b>30秒</b> 内点击下方按钮，否则将被<b>封禁 24小时</b>。\nPlease verify in <b>30s</b> or get <b>BANNED for 24h</b>.',
+                    text: `🛡 <b>人机验证 / Verification</b>\n\n请在 <b>30秒</b> 内点击按钮。\n截止时间: <b>${deadlineTime} (UTC)</b>\n超时将被<b>封禁 24小时</b>。\n\nPlease verify in <b>30s</b>.\nDeadline: <b>${deadlineTime} (UTC)</b>`,
                     parse_mode: 'HTML',
                     reply_markup: {
                         inline_keyboard: [[{
@@ -229,7 +255,6 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
         const senderUid = sender.id.toString();
         const kvKey = `map:${senderUid}:${message.message_id}`;
 
-        // 原地编辑 (限制 60秒)
         if (isEdited && message.text) {
             const editTime = message.edit_date || currentTime;
             if (editTime - message.date <= 60) {
@@ -248,7 +273,6 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
             }
         }
 
-        // 发送新消息
         await postToTelegramApi(botToken, 'sendChatAction', { chat_id: message.chat.id, action: 'typing' });
 
         const sendCopy = async (withUrl = false) => {
@@ -268,7 +292,6 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
         if (finalResp.ok) {
             const resultData = await finalResp.json();
             if (resultData.ok && resultData.result) {
-                // 消息ID映射保存 24小时，以支持后续的编辑同步
                 await KV.put(kvKey, resultData.result.message_id.toString(), { expirationTtl: 86400 });
             }
         }
@@ -286,7 +309,6 @@ export async function handleRequest(request, config) {
     const url = new URL(request.url);
     const path = url.pathname;
     
-    // 路由正则
     const matchInstall = path.match(new RegExp(`^/${prefix}/install/([^/]+)/([^/]+)$`));
     const matchUninstall = path.match(new RegExp(`^/${prefix}/uninstall/([^/]+)$`));
     const matchWebhook = path.match(new RegExp(`^/${prefix}/webhook/([^/]+)/([^/]+)$`));
