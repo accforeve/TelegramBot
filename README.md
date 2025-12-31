@@ -1,6 +1,6 @@
 ### **基于原版 https://github.com/wozulong/open-wegram-bot 增改**
 
-**### 相较于原版，做了如下增改：**
+相较于原版，做了如下增改：
 
 1. 核心架构与基础设施
 
