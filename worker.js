@@ -3,12 +3,10 @@ import { handleRequest } from './core.js';
 export default {
     async fetch(request, env, ctx) {
         const config = {
-            // 默认前缀 public
             prefix: env.PREFIX || 'public',
-            // 安全密钥
             secretToken: env.SECRET_TOKEN || '',
-            // 绑定 KV 数据库
-            kv: env.KV
+            kv: env.KV,
+            ctx: ctx // 关键点：这里必须把 ctx 传进去，旧版没有这一行
         };
 
         return handleRequest(request, config);
