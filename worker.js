@@ -6,9 +6,10 @@ export default {
             prefix: env.PREFIX || 'public',
             secretToken: env.SECRET_TOKEN || '',
             kv: env.KV,
-            ctx: ctx // 关键点：这里必须把 ctx 传进去，旧版没有这一行
+            ctx: ctx // 关键：传递 ctx 以支持后台非阻塞运行
         };
 
         return handleRequest(request, config);
     }
 };
+
