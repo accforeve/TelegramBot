@@ -88,7 +88,7 @@ https://[你的Worker域名]/public/install/[你的TG账号ID]/[你的机器人T
 2. 在浏览器打开这个拼接好的链接。
 3. 如果页面显示 {"success":true,"message":"Webhook successfully installed."}，恭喜你，大功告成！
 
-**⚠️注意：可以绑定多个bot。如果更迭代码，建议重新绑定bot。**
+**⚠️注意：可以绑定多个bot。如果更迭代码，建议重新激活bot（重复第五步）。**
 
 
 ### 原版地址：https://github.com/wozulong/open-wegram-bot
