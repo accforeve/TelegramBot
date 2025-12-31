@@ -90,3 +90,5 @@ https://[你的Worker域名]/public/install/[你的TG账号ID]/[你的机器人T
 
 **⚠️注意：可以绑定多个bot。如果更迭代码，建议解绑原来绑定的bot后重新绑定。**
 **解绑方法：https://[你的Worker域名]/public/uninstall/[你的机器人Token]**
+
+### ** [原版地址](https://github.com/wozulong/open-wegram-bot)**
