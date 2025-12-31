@@ -98,7 +98,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 return new Response('OK');
             }
 
-            // 3. 检查是否超过 30 秒 (原15秒)
+            // 3. 检查是否超过 30 秒
             const timeDiff = currentTime - parseInt(pendingTime);
             
             if (timeDiff > 30) {
