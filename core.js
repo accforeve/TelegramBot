@@ -1,6 +1,6 @@
 /**
- * Core Logic - Robust Performance Version
- * Fix: Added safety check for 'ctx' to prevent crash if worker.js is not updated.
+ * Open Wegram Bot - Ultimate Fixed Version
+ * Features: High Performance (ctx), Crash Protection (?.), Captcha, KV Sync
  */
 
 export function validateSecretToken(token) {
@@ -14,6 +14,7 @@ export function jsonResponse(data, status = 200) {
     });
 }
 
+// 格式化时间辅助函数
 function formatUTCTime(timestamp) {
     return new Date(timestamp * 1000).toISOString().replace('T', ' ').substring(0, 19) + " UTC";
 }
@@ -65,8 +66,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
         return new Response('Unauthorized', { status: 401 });
     }
 
-    // [关键修复] 定义安全的后台运行函数
-    // 如果 ctx 存在，使用 waitUntil (高性能)；如果不存在，使用 await (防崩溃)
+    // 定义后台运行助手：有 ctx 用 ctx，没有就 await (双重保险)
     const runTask = async (promise) => {
         if (ctx && typeof ctx.waitUntil === 'function') {
             ctx.waitUntil(promise);
@@ -80,7 +80,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
     const BAN_DURATION = 86400; // 24小时
 
     // ========================================================================
-    // 处理按钮点击 (Callback Query)
+    // A. 处理按钮点击 (人机验证逻辑)
     // ========================================================================
     if (update.callback_query) {
         const query = update.callback_query;
@@ -92,7 +92,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 KV.get(`pending:${userId}`)
             ]);
 
-            // A. 黑名单检查
+            // 1. 黑名单检查
             if (banTimestamp) {
                 const unbanTimeStr = formatUTCTime(parseInt(banTimestamp));
                 await runTask(postToTelegramApi(botToken, 'answerCallbackQuery', {
@@ -103,7 +103,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 return new Response('OK');
             }
 
-            // B. Session 检查
+            // 2. Session 过期检查
             if (!pendingTime) {
                 await runTask(postToTelegramApi(botToken, 'answerCallbackQuery', {
                     callback_query_id: query.id,
@@ -113,7 +113,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 return new Response('OK');
             }
 
-            // C. 超时计算
+            // 3. 超时计算
             const timeDiff = currentTime - parseInt(pendingTime);
             
             if (timeDiff > 30) {
@@ -137,7 +137,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                     })
                 ]));
             } else {
-                // 通过 -> 白名单
+                // 通过 -> 写入白名单
                 await runTask(Promise.all([
                     KV.put(`verified:${userId}`, 'true', { expirationTtl: 3600 }),
                     KV.delete(`pending:${userId}`),
@@ -157,7 +157,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
     }
 
     // ========================================================================
-    // 处理消息 (Message)
+    // B. 处理消息 (核心转发逻辑)
     // ========================================================================
     const message = update.message || update.edited_message;
     if (!message || (message.from && message.from.is_bot)) return new Response('OK');
@@ -166,29 +166,37 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
     const isEdited = !!update.edited_message;
 
     try {
-        // --- 场景 A: 站长回复用户 ---
+        // --- [修复点] 场景 1: 站长回复用户 ---
         if (reply && message.chat.id.toString() === ownerUid) {
+            // 使用可选链 (?.) 安全获取按钮，防止回复无键盘消息时崩溃
             const firstButton = reply.reply_markup?.inline_keyboard?.[0]?.[0];
-            let senderUid = firstButton?.callback_data;
-            if (!senderUid && firstButton?.url) {
-                senderUid = firstButton.url.split('tg://user?id=')[1];
-            }
 
-            if (senderUid) {
-                await runTask(postToTelegramApi(botToken, 'copyMessage', {
-                    chat_id: parseInt(senderUid),
-                    from_chat_id: message.chat.id,
-                    message_id: message.message_id
-                }));
+            if (firstButton) {
+                let senderUid = firstButton.callback_data;
+                // 兼容旧版链接格式
+                if (!senderUid && firstButton.url) {
+                    const urlParts = firstButton.url.split('tg://user?id=');
+                    if (urlParts.length > 1) senderUid = urlParts[1];
+                }
+
+                // 只有 ID 存在才转发
+                if (senderUid) {
+                    await runTask(postToTelegramApi(botToken, 'copyMessage', {
+                        chat_id: parseInt(senderUid),
+                        from_chat_id: message.chat.id,
+                        message_id: message.message_id
+                    }));
+                }
             }
+            // 无论是否成功转发，都返回 OK，防止 Worker 报错重试
             return new Response('OK');
         }
 
-        // --- 场景 B: 用户发给站长 ---
+        // --- 场景 2: 用户发给站长 ---
         if (message.chat.id.toString() !== ownerUid && KV) {
             const userId = message.chat.id.toString();
 
-            // 并行查询
+            // 并行查询所有状态 (极速)
             const [banTimestamp, existingPending, isVerified] = await Promise.all([
                 KV.get(`blacklist:${userId}`),
                 KV.get(`pending:${userId}`),
@@ -202,7 +210,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 return new Response('OK');
             }
 
-            // 2. Pending 状态检查
+            // 2. Pending 状态检查 (超时自动封禁)
             if (existingPending) {
                 if (currentTime - parseInt(existingPending) > 30) {
                     const unbanTime = currentTime + BAN_DURATION;
@@ -217,7 +225,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
                 return new Response('OK');
             }
 
-            // 3. 白名单检查
+            // 3. 白名单检查 (发起验证)
             if (!isVerified) {
                 const deadlineTime = new Date((currentTime + 30) * 1000).toISOString().substr(11, 8);
                 
@@ -234,13 +242,13 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
             }
         }
 
-        // --- 正常转发逻辑 (通过验证后) ---
+        // --- 场景 3: 正常转发 (已验证用户) ---
         if (!isEdited && "/start" === message.text) return new Response('OK');
 
         const senderUid = message.chat.id.toString();
         const kvKey = `map:${senderUid}:${message.message_id}`;
 
-        // 同步编辑
+        // 同步编辑逻辑
         if (isEdited && message.text) {
             const editDelay = (message.edit_date || currentTime) - message.date;
             if (editDelay <= 60) {
@@ -260,13 +268,13 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
             }
         }
 
-        // 显示正在输入 (后台运行)
+        // 显示 "正在输入" 状态 (后台运行)
         await runTask(postToTelegramApi(botToken, 'sendChatAction', { 
             chat_id: message.chat.id, 
             action: 'typing' 
         }));
 
-        // 发送消息
+        // 转发消息
         const sendCopy = async (withUrl = false) => {
             const ik = [[{ text: senderUid, callback_data: senderUid }]];
             if (withUrl && /^\d+$/.test(senderUid)) ik[0][0].url = `tg://user?id=${senderUid}`;
@@ -281,7 +289,7 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
         let finalResp = await sendCopy(true);
         if (!finalResp.ok) finalResp = await sendCopy(false);
 
-        // 记录 ID 映射
+        // 记录 ID 映射 (后台运行)
         if (finalResp.ok) {
             const resultData = await finalResp.json();
             if (resultData.ok && resultData.result) {
@@ -292,8 +300,9 @@ export async function handleWebhook(request, ownerUid, botToken, secretToken, KV
         return new Response('OK');
 
     } catch (error) {
+        // 全局错误捕获，防止 500 错误
         console.error('Error:', error);
-        return new Response('Error', { status: 200 });
+        return new Response('Error handled', { status: 200 });
     }
 }
 
