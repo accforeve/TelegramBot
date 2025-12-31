@@ -90,5 +90,4 @@ https://[你的Worker域名]/public/install/[你的TG账号ID]/[你的机器人T
 
 **⚠️注意：可以绑定多个bot。如果更迭代码，建议重新激活bot（重复第五步）。**
 
-
 ### 原版地址：https://github.com/wozulong/open-wegram-bot
